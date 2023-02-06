@@ -1,6 +1,6 @@
 import os
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from loguru import logger
 from pydantic import BaseModel
@@ -50,20 +50,22 @@ class DesktopFileHandler:
         # iterate over the files, ensure their extensions are .desktop and load them into DesktopFile objects
         for file in files:
             if ".desktop" in file:
-                self._desktop_files.append(self._parse_file(file))
+                desktop_file = self._parse_file(file)
+                if desktop_file:
+                    self._desktop_files.append(desktop_file)
             else:
                 logger.warning(f"'{file}' does not appear to be a .desktop file, and will be ignored")
 
     def get_desktop_files(self) -> List[DesktopFile]:
         return self._desktop_files
 
-    def _parse_file(self, filename: str) -> DesktopFile:
+    def _parse_file(self, filename: str) -> Union[DesktopFile, None]:
         """
         Parses a .desktop file, returns a DesktopFile object
         :param filename:
         :return:
         """
-        blacklist_characters = ["[", "]", "#", "\n", " "]
+        blacklist_characters = ["[Desktop", "#", "\n"]
         desktop_file = DesktopFile()
 
         # read the file
@@ -85,6 +87,37 @@ class DesktopFileHandler:
             except ValueError as e:
                 logger.critical(f"Unknown format: '{line}': Line# {elem} in {filename}")
                 continue
+
+            # begin populating object
+            if key == "Name":
+                desktop_file.name = value
+            elif key == "Type":
+                desktop_file.type = DesktopFileType(value)
+            elif key == "GenericName":
+                desktop_file.generic_name = value
+            elif key == "NoDisplay":
+                desktop_file.no_display = value
+            elif key == "Comment":
+                desktop_file.comment = value
+            elif key == "Icon":
+                desktop_file.icon = value
+            elif key == "Hidden":
+                desktop_file.hidden = bool(value)
+            elif key == "TryExec":
+                desktop_file.try_exec = value
+            elif key == "Exec":
+                desktop_file.exec = value
+            elif key == "Path":
+                desktop_file.path = value
+            elif key == "Terminal":
+                desktop_file.terminal = bool(value)
+            elif key == "URL":
+                desktop_file.url = value
+
+        # warn if the file does not have a valid Name key
+        if not desktop_file.name:
+            logger.warning(f"'{filename}' does not have a valid 'Name' key & therefore is not a valid .desktop file, skipping!")
+            return
 
         return desktop_file
 
